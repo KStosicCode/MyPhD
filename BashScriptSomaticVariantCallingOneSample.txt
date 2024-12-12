@@ -1,0 +1,123 @@
+#!/bin/bash
+
+#directories
+ref="/home/ulb/gastrexp/kstosic/hg38/resources_broad_hg38_v0_Homo_sapiens_assembly38.fasta"
+known_sites="/home/ulb/gastrexp/kstosic/known_sites"
+aligned_reads="/home/ulb/gastrexp/kstosic/Aligned_Reads_cfDNA"
+results="/home/ulb/gastrexp/kstosic/results"
+germlineresource_and_pon="/home/ulb/gastrexp/kstosic/germlineresource_and_pon"
+
+
+
+# Base quality score recalibration
+echo "Base quality score recalibration"
+
+# 1. Build the model on each library
+gatk BaseRecalibrator \
+  -I ${aligned_reads}/SKO1.bam \
+  -R ${ref} \
+  -O ${aligned_reads}/SKO1_recal_report.table \
+  --known-sites ${known_sites}/resources_broad_hg38_v0_Homo_sapiens_assembly38.dbsnp138.vcf \
+  --known-sites ${known_sites}/resources_broad_hg38_v0_Homo_sapiens_assembly38.known_indels.vcf \
+  --known-sites ${known-sites}/resources_broad_hg38_v0_Mills_and_1000G_gold_standard.indels.hg38.vcf \
+  --known-sites ${known-sites}/resources_broad_hg38_v0_1000G_phase1.snps.high_confidence.hg38.vcf
+
+
+
+# 2. Apply the model to each sample to adjust the base quality scores
+gatk ApplyBQSR \
+  -I ${aligned_reads}/SKO1.bam \
+  -R ${ref} \
+  --bqsr-recal-file ${aligned_reads}/SKO1_recal_report.table \
+  -O ${aligned_reads}/SKO1_bqsr.bam
+
+
+
+#Call variants - gatk Mutect2
+echo "Call variants - gatk Mutect2"
+
+gatk Mutect2 \
+  -R ${ref} \
+  -I ${aligned_reads}/SKO1.bam \
+  --germline-resource ${germlineresource_and_pon}/af-only-gnomad.vcf.gz \
+  --panel-of-normals ${germlineresource_and_pon}/pon.vcf.gz \
+  --f1r2-tar-gz ${results}/SKO1_f1r2.tar.gz \
+  --stats ${results}/SKO1.raw_variants.vcf.stat \
+  -O ${results}/SKO1_raw_variants.vcf
+
+
+
+# Merge the stats files
+echo "Merge the stats"
+
+gatk MergeMutectStats \
+  --stats ${results}/SKO1.raw_variants.vcf.stats
+  --stats ${results}/SKO2.raw_variants.vcf.stats
+  --stats ${results}/SKO3.raw_variants.vcf.stats
+  --stats ${results}/SKO4.raw_variants.vcf.stats
+  --stats ${results}/SKO5.raw_variants.vcf.stats
+  --stats ${results}/SKO6.raw_variants.vcf.stats
+  -O ${results}/merged.stats
+
+
+
+# Passing the raw data to LearnReadOrientationModel
+echo "Passing the raw data to LearnReadOrientationModel"
+
+gatk LearnReadOrientationModel \
+  -I ${results}/SKO1_f1r2.tar.gz \
+  -O ${results}/reads-orientation-model.tar.gz
+
+
+
+# Estimating contamination levels
+echo "Estimating contamination levels"
+
+gatk GetPileupSummaries \
+  -I ${aligned_reads}/SKO1.bam \
+  -V ${germlineresource_and_pon}/af-only-gnomad.vcf.gz \
+  -L ${germlineresource_and_pon}/af-only-gnomad.vcf.gz \
+  -O ${results}/SKO1_pileups.table
+
+
+
+# Quantifying contamination
+echo "Quantifying contamination"
+
+gatk CalculateContamination \
+  -I ${results}/SKO1_pileups.table \
+  -tumor-segmentation ${results}/SKO1.segments.table \
+  -O ${results}/SKO1_calculatedcontamination.table
+
+
+
+# Filtering out artifacts using the generated models and stats
+echo "Filtering out artifacts using the generated models and stats"
+
+gatk FilterMutectCalls \
+  -V ${results}/SKO1_raw_variants.vcf \
+  -R ${ref} \
+  -tumor-segmentation ${results}/SKO1.segments.table \
+  --contamination-table ${results}/SKO1_calculatedcontamination.table \
+  --ob-priors ${results}/reads-orientation-model.tar.gz \
+  --stats ${results}/merged.stats \
+  -O ${results}/SKO1_filtered_variants.vcf
+
+
+
+# Downloading the Funcotator
+
+./gatk FuncotatorDataSourceDownloader --somatic --validate-integrity --extract-after-download
+
+
+
+# Annotate Variants - GATK4 Funcotator
+echo "Annotate Variants - GATK4 Funcotator"
+
+gatk Funcotator \
+  --variant ${results}/SKO1_filtered_variants.vcf \
+  --reference ${ref} \
+  --ref-version hg38 \
+  --data-sources-path /home/ulb/gastrexp/kstosic/funcotator/functotator_prepackaged_sources/funcotator/hg38/funcotator_dataSources.v1.7.20200521g \
+  --output ${results}/SKO1_filtered_variants_funcotated.maf \
+  --output-file-format MAF

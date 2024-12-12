@@ -1,0 +1,1 @@
+perl table_annovar.pl SKO3_filtered_variants.avinput /scratch/ulb/gastrexp/kstosic/DNA_Variant_Calling/Annovar/annovar/humandb/ -buildver hg38 -out SKO3_annovar_output -remove -protocol refGene,cytoBand,avsnp147,dbnsfp30a,exac03 -operation gx,r,f,f,f -nastring . -polish
