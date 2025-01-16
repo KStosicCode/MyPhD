@@ -8,6 +8,9 @@ library(AnnotationDbi)
 library(biomaRt)
 library(oligo)
 library(affy)
+library(hgu219.db)
+library(ggplot2)
+library(ggrepel)
 
 expression_data <- Puleo_AllData$exp
 metadata <- Puleo_AllData$samannot
@@ -82,7 +85,6 @@ expression_data <- affy::rma(expression_data)
 #from the rows in metadata (because columns in the expression_data correspond to
 #the rows in metadata), by keeping only those columns in the expression_data
 #that have column names corresponding to the row names of the metadata
-rownames(metadata) <- metadata$idcit
 expression_data <- expression_data[colnames(expression_data) %in% rownames(metadata)]
 #Setting those two vectors in the same order, just in case that they got 
 #accidentally reordered during the previous step
@@ -135,15 +137,27 @@ top.table$Probe.Set.ID <- rownames(top.table)
 length(top.table$Probe.Set.ID)
 length(gene_names$Probe.Set.ID)
 top.table2 <- merge(top.table, gene_names, by="Probe.Set.ID")
-rownames(top.table2) <- top.table2$Gene.Symbol
 
-#Saving the general table
-save(top.table2, file="OS_36vs12_toptable.Rdata")
-write.csv(x=top.table2,"OS_36vs12_toptable.csv")
-write.table(top.table2, file = "OS_36vs12_toptable.txt", row.names = F, sep = "\t", quote = F)
-write_xlsx(top.table2,"C:/Users/Admin/Desktop/R Studio for Bulk and Single Cell Analysis/Puleo Microarray/OS_36_vs_12_DGE\\OS_36vs12_toptable.xlsx")
-#Importing the saved table
-w <- read.delim("OS_36vs12_toptable.txt")
+#Adding gene names to the top table
+hgu <- hgu219.db
+keytypes(hgu219.db)
+
+top.table2$SYMBOL <- mapIds(hgu,
+                           keys=top.table2$Probe.Set.ID,
+                           column="SYMBOL",
+                           keytype="PROBEID",
+                           multiVals="first")
+
+#Removing NA values
+length(top.table2$SYMBOL)
+index <- which(is.na(top.table2$SYMBOL))
+top.table2 <- top.table2[-index,]
+length(top.table2$SYMBOL)
+
+#Removing the duplicated names
+index = which(duplicated(top.table2$SYMBOL))
+top.table2 <- top.table2[-index,]
+length((top.table2$SYMBOL))
 
 #Up and down regulated genes in LongerOS vs ShorterOS for OS 36 vs 12
 library(dplyr)
@@ -155,20 +169,142 @@ LongerOS_vs_ShorterOS_up <- LongerOS_vs_ShorterOS[LongerOS_vs_ShorterOS$logFC>0,
 #Down regulated
 LongerOS_vs_ShorterOS_down <- LongerOS_vs_ShorterOS[LongerOS_vs_ShorterOS$logFC<0,]
 
+#Saving the general table
+save(top.table2, file="OS_36vs12_toptable2.Rdata")
+write.csv(x=top.table2,"OS_36vs12_toptable2.csv")
+write.table(top.table2, file = "OS_36vs12_toptable2.txt", row.names = F, sep = "\t", quote = F)
+write_xlsx(top.table2,"C:/Users/Admin/Desktop/R Studio for Bulk and Single Cell Analysis/Puleo Microarray/OS_36_vs_12_DGE_2\\OS_36vs12_toptable2.xlsx")
+#Importing the saved table
+w <- read.delim("OS_36vs12_toptable2.txt")
+
 #Saving the top table for Up regulated genes for OS 36 vs 12
-save(LongerOS_vs_ShorterOS_up,file="OS_36vs12_lfc1_up.Rdata")
-write.csv(x=LongerOS_vs_ShorterOS_up,"OS_36vs12_lfc1_up.csv")
-write.table(LongerOS_vs_ShorterOS_up, file = "OS_36vs12_lfc1_up.txt", row.names = F, sep = "\t", quote = F)
-write_xlsx(LongerOS_vs_ShorterOS_up,"C:/Users/Admin/Desktop/R Studio for Bulk and Single Cell Analysis/Puleo Microarray/OS_36_vs_12_DGE\\OS_36vs12_lfc1_up.xlsx")
+save(LongerOS_vs_ShorterOS_up,file="OS_36vs12_lfc1_up2.Rdata")
+write.csv(x=LongerOS_vs_ShorterOS_up,"OS_36vs12_lfc1_up2.csv")
+write.table(LongerOS_vs_ShorterOS_up, file = "OS_36vs12_lfc1_up2.txt", row.names = F, sep = "\t", quote = F)
+write_xlsx(LongerOS_vs_ShorterOS_up,"C:/Users/Admin/Desktop/R Studio for Bulk and Single Cell Analysis/Puleo Microarray/OS_36_vs_12_DGE_2\\OS_36vs12_lfc1_up2.xlsx")
 
 #Saving the top table for Down regulated genes for OS 36 vs 12
-save(LongerOS_vs_ShorterOS_down,file="OS_36vs12_lfc1_down.Rdata")
-write.csv(x=LongerOS_vs_ShorterOS_down,"OS_36vs12_lfc1_down.csv")
-write.table(LongerOS_vs_ShorterOS_down, file = "OS_36vs12_lfc1_down.txt", row.names = F, sep = "\t", quote = F)
-write_xlsx(LongerOS_vs_ShorterOS_down,"C:/Users/Admin/Desktop/R Studio for Bulk and Single Cell Analysis/Puleo Microarray/OS_36_vs_12_DGE\\OS_36vs12_lfc1_down.xlsx")
+save(LongerOS_vs_ShorterOS_down,file="OS_36vs12_lfc1_down2.Rdata")
+write.csv(x=LongerOS_vs_ShorterOS_down,"OS_36vs12_lfc1_down2.csv")
+write.table(LongerOS_vs_ShorterOS_down, file = "OS_36vs12_lfc1_down2.txt", row.names = F, sep = "\t", quote = F)
+write_xlsx(LongerOS_vs_ShorterOS_down,"C:/Users/Admin/Desktop/R Studio for Bulk and Single Cell Analysis/Puleo Microarray/OS_36_vs_12_DGE_2\\OS_36vs12_lfc1_down_2.xlsx")
 
 #Volcano Plot
 head((fit.cont$coefficients))
 head(rownames(fit.cont$coefficients))
 volcanoplot(fit.cont, coef = 1, highlight = 10, names = rownames(fit.cont$coefficients),
             main = "LongerOS_vs_ShorterOS")
+
+
+
+#Volcano plot
+#Option 1
+#Classifying genes and defining colors
+dge_results <- top.table2 %>%
+  mutate(
+    significance = case_when(
+      adj.P.Val < 0.05 & logFC > 1 ~ "Upregulated",
+      adj.P.Val < 0.05 & logFC < -1 ~ "Downregulated",
+      TRUE ~ "Nonsignificant"
+    ),
+    color = case_when(
+      significance == "Upregulated" ~ "red",        
+      significance == "Downregulated" ~ "blue",     
+      TRUE ~ "grey"                                 
+    )
+  )
+
+#Creating volcano plot
+volcano_plot <- ggplot(dge_results, aes(x = logFC, y = -log10(adj.P.Val), color = significance)) + # Use significance for legend
+  geom_point(alpha = 0.8, size = 2) +                              
+  scale_color_manual(
+    values = c(
+      "Upregulated" = "red",    
+      "Downregulated" = "blue",  
+      "Nonsignificant" = "lightblue"    
+    ),
+    name = "Significance"  # Legend title
+  ) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +     
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed") +         
+  geom_text_repel(
+    data = dge_results %>% filter(significance != "Nonsignificant"), 
+    aes(label = SYMBOL),
+    size = 3, 
+    box.padding = 0.5, 
+    max.overlaps = 15
+  ) +                                                             
+  labs(
+    title = "Volcano Plot: MoreThan36Months vs LessThan12Months",
+    x = "Log2 Fold Change",
+    y = "-Log10 Adjusted P-value"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14, margin = margin(b = 15)), 
+    axis.title.x = element_text(color = "black", face = "bold", size = 12, margin = margin(t = 10)), 
+    axis.title.y = element_text(color = "black", face = "bold", size = 12, margin = margin(r = 10)), 
+    axis.line = element_line(color = "black"),                        
+    axis.ticks = element_line(color = "black")                        
+  )
+
+#Displaying plot
+volcano_plot
+
+
+#Option 2
+#Classifying genes and defining colors for all upregulated and downregulated
+dge_results <- top.table2 %>%
+  mutate(
+    category = case_when(
+      logFC > 0 ~ "Upregulated",        
+      logFC <= 0 ~ "Downregulated"      
+    ),
+    color = case_when(
+      category == "Upregulated" ~ "red",  
+      category == "Downregulated" ~ "blue" 
+    )
+  )
+
+#Filtering for significant genes to label
+significant_genes <- dge_results %>%
+  filter(adj.P.Val < 0.05 & abs(logFC) > 1)  
+
+#Creating volcano plot
+volcano_plot <- ggplot(dge_results, aes(x = logFC, y = -log10(adj.P.Val), color = category)) +
+  geom_point(alpha = 0.8, size = 2) +                              
+  scale_color_manual(
+    values = c(
+      "Upregulated" = "red",    
+      "Downregulated" = "blue"
+    ),
+    name = "Gene Expression"
+  ) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  geom_text_repel(
+    data = significant_genes,          
+    aes(label = SYMBOL),
+    size = 3,
+    box.padding = 0.5,
+    max.overlaps = 15
+  ) +
+  labs(
+    title = "Volcano Plot: MoreThan36Months vs LessThan12Months",
+    x = "Log2 Fold Change",
+    y = "-Log10 Adjusted P-value"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14, margin = margin(b = 15)), 
+    axis.title.x = element_text(color = "black", face = "bold", size = 12, margin = margin(t = 10)), 
+    axis.title.y = element_text(color = "black", face = "bold", size = 12, margin = margin(r = 10)), 
+    axis.line = element_line(color = "black"),                        
+    axis.ticks = element_line(color = "black")                        
+  )
+
+
+#Displaying plot
+volcano_plot
+
+#Save the plot
+ggsave("volcano_plot_OS_36vs12.png", volcano_plot, width = 8, height = 6, dpi = 300)
